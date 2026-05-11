@@ -188,6 +188,61 @@ internal class AndroidARView(
                             }
 
                         }
+                        "addNativeSphereMarker" -> {
+                            // Adds a native Sceneform sphere (NO GLB/network required)
+                            // args: anchorName: String, radius: Double?, name: String
+                            val anchorName: String? = call.argument<String>("anchorName")
+                            val radius: Double? = call.argument<Double>("radius")
+                            val nodeName: String? = call.argument<String>("name")
+                            if (anchorName != null && nodeName != null) {
+                                val anchorNode = arSceneView.scene.findByName(anchorName) as AnchorNode?
+                                if (anchorNode != null) {
+                                    modelBuilder.makeSphereMarkerNode(
+                                        viewContext,
+                                        radius?.toFloat() ?: 0.025f
+                                    ).thenAccept { sphereNode ->
+                                        // Now renderable is set — safe to add to scene
+                                        sphereNode.name = nodeName
+                                        anchorNode.addChild(sphereNode)
+                                        result.success(true)
+                                    }.exceptionally { throwable ->
+                                        Log.e(TAG, "Sphere marker failed: ${throwable.message}")
+                                        result.success(false)
+                                        null
+                                    }
+                                } else {
+                                    result.success(false)
+                                }
+                            } else {
+                                result.success(false)
+                            }
+                        }
+
+                        "addNativeLine" -> {
+                            // Adds a 3D cylinder line between two world positions (NO network)
+                            // args: name: String, fromX/Y/Z: Double, toX/Y/Z: Double
+                            val lineName: String? = call.argument<String>("name")
+                            val fx = call.argument<Double>("fromX")?.toFloat()
+                            val fy = call.argument<Double>("fromY")?.toFloat()
+                            val fz = call.argument<Double>("fromZ")?.toFloat()
+                            val tx = call.argument<Double>("toX")?.toFloat()
+                            val ty = call.argument<Double>("toY")?.toFloat()
+                            val tz = call.argument<Double>("toZ")?.toFloat()
+                            if (lineName != null && fx!=null && fy!=null && fz!=null
+                                && tx!=null && ty!=null && tz!=null) {
+                                val from = Vector3(fx, fy, fz)
+                                val to   = Vector3(tx, ty, tz)
+                                val lineNode = modelBuilder.makeCylinderLineNode(
+                                    viewContext, from, to,
+                                    android.graphics.Color.valueOf(1f, 1f, 0f)
+                                )
+                                lineNode.name = lineName
+                                arSceneView.scene.addChild(lineNode)
+                                result.success(true)
+                            } else {
+                                result.success(false)
+                            }
+                        }
                         "removeNode" -> {
                             val nodeName: String? = call.argument<String>("name")
                             nodeName?.let{
@@ -216,6 +271,7 @@ internal class AndroidARView(
                     }
                 }
             }
+
     private val onAnchorMethodCall =
             object : MethodChannel.MethodCallHandler {
                 override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {

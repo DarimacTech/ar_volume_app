@@ -33,6 +33,65 @@ import java.security.AccessController
 // Responsible for creating Renderables and Nodes
 class ArModelBuilder {
 
+    // Creates a cyan sphere marker node (NO network required).
+    // Returns CompletableFuture<Node> so caller waits until renderable is ready.
+    fun makeSphereMarkerNode(context: Context, radius: Float = 0.025f): CompletableFuture<Node> {
+        val future = CompletableFuture<Node>()
+        val markerNode = Node()
+        MaterialFactory.makeOpaqueWithColor(context, Color(android.graphics.Color.CYAN))
+            .thenAccept { material ->
+                val sphere = ShapeFactory.makeSphere(radius, Vector3(0f, 0f, 0f), material)
+                sphere.isShadowCaster = false
+                sphere.isShadowReceiver = false
+                markerNode.renderable = sphere
+                future.complete(markerNode) // only resolves AFTER renderable is set
+            }
+            .exceptionally { throwable ->
+                future.completeExceptionally(throwable)
+                null
+            }
+        return future
+    }
+
+    // Creates a cylinder to represent a line between two 3D points (NO network required)
+    fun makeCylinderLineNode(
+        context: Context,
+        from: Vector3,
+        to: Vector3,
+        color: android.graphics.Color = android.graphics.Color.valueOf(1f, 1f, 0f), // Yellow
+        radius: Float = 0.005f
+    ): Node {
+        val lineNode = Node()
+        val diff = Vector3.subtract(to, from)
+        val length = diff.length()
+
+        // Guard: skip zero-length lines (from ≈ to) → avoids NaN crash
+        if (length < 0.001f) return lineNode
+
+        val midpoint = Vector3.add(from, to).scaled(0.5f)
+
+        // Guard: if diff is parallel to Vector3.up(), use forward as up-hint
+        // to avoid undefined lookRotation (cross product = zero)
+        val diffNorm = diff.normalized()
+        val dotWithUp = Math.abs(Vector3.dot(diffNorm, Vector3.up()).toDouble()).toFloat()
+        val upHint = if (dotWithUp > 0.99f) Vector3.forward() else Vector3.up()
+        val rotation = Quaternion.lookRotation(diffNorm, upHint)
+
+        lineNode.worldPosition = midpoint
+        lineNode.worldRotation = rotation
+
+        MaterialFactory.makeOpaqueWithColor(
+            context,
+            Color(color.red(), color.green(), color.blue())
+        ).thenAccept { material ->
+            val cylinder = ShapeFactory.makeCylinder(radius, length, Vector3(0f, 0f, 0f), material)
+            cylinder.isShadowCaster = false
+            cylinder.isShadowReceiver = false
+            lineNode.renderable = cylinder
+        }
+        return lineNode
+    }
+
     // Creates feature point node
     fun makeFeaturePointNode(context: Context, xPos: Float, yPos: Float, zPos: Float): Node {
         val featurePoint = Node()                 

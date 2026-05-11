@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:ar_flutter_plugin/models/ar_anchor.dart';
 import 'package:ar_flutter_plugin/models/ar_node.dart';
 import 'package:ar_flutter_plugin/utils/json_converters.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:vector_math/vector_math_64.dart';
+
 
 // Type definitions to enforce a consistent use of the API
 typedef NodeTapResultHandler = void Function(List<String> nodes);
@@ -145,4 +147,54 @@ class ARObjectManager {
   removeNode(ARNode node) {
     _channel.invokeMethod<String>('removeNode', {'name': node.name});
   }
+
+  /// Remove a node by its name (for native sphere/line nodes)
+  removeNodeByName(String name) {
+    _channel.invokeMethod<String>('removeNode', {'name': name});
+  }
+
+  /// Add a native sphere marker at the given anchor (NO network/GLB required).
+  /// Returns true on success. [anchorName] must match an existing anchor's name.
+  Future<bool> addNativeSphereMarker({
+    required String anchorName,
+    required String nodeName,
+    double radius = 0.025,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod<bool>('addNativeSphereMarker', {
+        'anchorName': anchorName,
+        'name': nodeName,
+        'radius': radius,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('addNativeSphereMarker error: $e');
+      return false;
+    }
+  }
+
+  /// Draw a 3D line (cylinder) between two world-space positions.
+  /// [name] will be used to identify and remove the line later.
+  Future<bool> addNativeLine({
+    required String name,
+    required Vector3 from,
+    required Vector3 to,
+  }) async {
+    try {
+      final result = await _channel.invokeMethod<bool>('addNativeLine', {
+        'name': name,
+        'fromX': from.x.toDouble(),
+        'fromY': from.y.toDouble(),
+        'fromZ': from.z.toDouble(),
+        'toX': to.x.toDouble(),
+        'toY': to.y.toDouble(),
+        'toZ': to.z.toDouble(),
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('addNativeLine error: $e');
+      return false;
+    }
+  }
 }
+
