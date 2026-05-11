@@ -53,6 +53,10 @@ class _ARScreenState extends State<ARScreen> {
         title: const Text("AR Volume Measure"),
         actions: [
           IconButton(
+            icon: const Icon(Icons.undo),
+            onPressed: points.isEmpty ? null : removeLastPoint,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: resetPoints,
           )
@@ -65,7 +69,7 @@ class _ARScreenState extends State<ARScreen> {
             planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
           ),
           Positioned(
-            bottom: 20,
+            top: 20,
             left: 20,
             right: 20,
             child: Card(
@@ -120,20 +124,22 @@ class _ARScreenState extends State<ARScreen> {
   }
 
   String _getInstructionText() {
-    if (points.isEmpty) return "Tap to set starting point (Point 1)";
-    if (points.length == 1) return "Tap for Length (Point 2)";
-    if (points.length == 2) return "Tap for Width (Point 3)";
-    if (points.length == 3) return "Tap for Height (Point 4)";
-    return "All points set! Tap refresh to start over.";
+    if (points.isEmpty) return "Tap for Base - Corner 1";
+    if (points.length == 1) return "Tap for Base - Corner 2";
+    if (points.length == 2) return "Tap for Base - Corner 3";
+    if (points.length == 3) return "Tap for Base - Corner 4";
+    if (points.length == 4) return "Tap for Top - Corner 1 (above Corner 1)";
+    if (points.length == 5) return "Tap for Top - Corner 2 (above Corner 2)";
+    if (points.length == 6) return "Tap for Top - Corner 3 (above Corner 3)";
+    if (points.length == 7) return "Tap for Top - Corner 4 (above Corner 4)";
+    if (points.length < 7000) return "Point ${points.length} set. Keep tapping for more points!";
+    return "All 7000 points set! Tap refresh to start over.";
   }
 
   void resetPoints() {
     setState(() {
       points.clear();
-      length = 0;
-      width = 0;
-      height = 0;
-      volume = 0;
+      updateCalculations();
     });
 
     // Remove all nodes manually
@@ -151,6 +157,85 @@ class _ARScreenState extends State<ARScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Points reset")),
     );
+  }
+
+  void removeLastPoint() {
+    if (points.isEmpty) return;
+
+    setState(() {
+      points.removeLast();
+
+      // Remove last node manually
+      if (nodes.isNotEmpty) {
+        var lastNode = nodes.removeLast();
+        arObjectManager?.removeNode(lastNode);
+      }
+
+      // Remove last anchor manually
+      if (anchors.isNotEmpty) {
+        var lastAnchor = anchors.removeLast();
+        arAnchorManager?.removeAnchor(lastAnchor);
+      }
+
+      updateCalculations();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Last point removed"),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void updateCalculations() {
+    // Reset to defaults
+    length = 0;
+    width = 0;
+    height = 0;
+    volume = 0;
+
+    if (points.length >= 2) {
+      length = calcDistance(points[0], points[1]);
+    }
+    if (points.length >= 3) {
+      width = calcDistance(points[1], points[2]);
+    }
+
+    if (points.length == 8) {
+      // 1. Base Dimensions
+      double d12 = calcDistance(points[0], points[1]);
+      double d23 = calcDistance(points[1], points[2]);
+      double d34 = calcDistance(points[2], points[3]);
+      double d41 = calcDistance(points[3], points[0]);
+
+      double avgBaseLen = (d12 + d34) / 2;
+      double avgBaseWidth = (d23 + d41) / 2;
+      double baseArea = avgBaseLen * avgBaseWidth;
+
+      // 2. Top Dimensions
+      double d56 = calcDistance(points[4], points[5]);
+      double d67 = calcDistance(points[5], points[6]);
+      double d78 = calcDistance(points[6], points[7]);
+      double d85 = calcDistance(points[7], points[4]);
+
+      double avgTopLen = (d56 + d78) / 2;
+      double avgTopWidth = (d67 + d85) / 2;
+      double topArea = avgTopLen * avgTopWidth;
+
+      // 3. Height (Average of 4 vertical edges)
+      double h1 = calcDistance(points[0], points[4]);
+      double h2 = calcDistance(points[1], points[5]);
+      double h3 = calcDistance(points[2], points[6]);
+      double h4 = calcDistance(points[3], points[7]);
+
+      height = (h1 + h2 + h3 + h4) / 4;
+      length = (avgBaseLen + avgTopLen) / 2;
+      width = (avgBaseWidth + avgTopWidth) / 2;
+
+      // Volume of a frustum-like box (average area * height)
+      volume = ((baseArea + topArea) / 2) * height;
+    }
   }
 
   // Plugin v0.7.3 requires 4 parameters (includes ARLocationManager)
@@ -182,9 +267,9 @@ class _ARScreenState extends State<ARScreen> {
       return;
     }
 
-    if (points.length >= 4) {
+    if (points.length >= 7000) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Max points reached. Reset to start over.")),
+        const SnackBar(content: Text("Max 7000 points reached. Reset to start over.")),
       );
       return;
     }
@@ -203,7 +288,7 @@ class _ARScreenState extends State<ARScreen> {
         var node = ARNode(
           type: NodeType.webGLB,
           uri: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb",
-          scale: Vector3(0.005, 0.005, 0.005), // Scale down the duck so it looks like a dot
+          scale: Vector3(0.012, 0.012, 0.012), // Increased size as requested
           position: Vector3(0, 0, 0),
         );
 
@@ -213,15 +298,7 @@ class _ARScreenState extends State<ARScreen> {
           nodes.add(node);
           setState(() {
             points.add(position);
-            
-            if (points.length == 2) {
-              length = calcDistance(points[0], points[1]);
-            } else if (points.length == 3) {
-              width = calcDistance(points[1], points[2]);
-            } else if (points.length == 4) {
-              height = calcDistance(points[2], points[3]);
-              volume = length * width * height;
-            }
+            updateCalculations();
           });
 
           ScaffoldMessenger.of(context).showSnackBar(

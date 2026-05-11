@@ -39,7 +39,7 @@ class ArModelBuilder {
         var cubeRenderable: ModelRenderable? = null      
         MaterialFactory.makeOpaqueWithColor(context, Color(android.graphics.Color.YELLOW))
         .thenAccept { material ->
-            val vector3 = Vector3(0.01f, 0.01f, 0.01f)
+            val vector3 = Vector3(0.015f, 0.015f, 0.015f)
             cubeRenderable = ShapeFactory.makeCube(vector3, Vector3(xPos, yPos, zPos), material)
             cubeRenderable?.isShadowCaster = false
             cubeRenderable?.isShadowReceiver = false
