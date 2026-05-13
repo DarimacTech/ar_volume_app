@@ -66,6 +66,7 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
 
   // Line node names (so we can remove them on reset/undo)
   final List<String> _lineNodeNames = [];
+  String? _volumeNodeName;
 
   double _length = 0, _width = 0, _height = 0, _volume = 0;
   bool _isProcessingTap = false;
@@ -111,7 +112,11 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
         _arObjectManager?.removeNodeByName(corner.sphereNodeName);
         _arAnchorManager?.removeAnchor(corner.anchor);
       }
-      _arSessionManager?.dispose();
+      if (_volumeNodeName != null) {
+      _arObjectManager?.removeNodeByName(_volumeNodeName!);
+      _volumeNodeName = null;
+    }
+    _arSessionManager?.dispose();
     } catch (e) {
       debugPrint('disposeAR error: $e');
     }
@@ -241,18 +246,20 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
           }
           // Close top rectangle + draw all 4 vertical edges
           if (n == 8) {
-            await _drawLineBetween(
-              _corners[7].worldPosition,
-              _corners[4].worldPosition,
-              label: 'topLine_close',
-            );
-            for (int i = 0; i < 4; i++) {
-              await _drawLineBetween(
-                _corners[i].worldPosition,
-                _corners[i + 4].worldPosition,
-                label: 'vertEdge_$i',
-              );
+            // Remove all temporary lines first
+            for (final name in _lineNodeNames) {
+              _arObjectManager?.removeNodeByName(name);
             }
+            _lineNodeNames.clear();
+
+            // Draw the cohesive 3D Volume (Mesh)
+            final volName = _uniqueName('volume_box');
+            final pts = _corners.map((c) => c.worldPosition).toList();
+            final ok = await _arObjectManager?.addNativeVolume(
+              name: volName,
+              points: pts,
+            ) ?? false;
+            if (ok) _volumeNodeName = volName;
           }
         }
 
@@ -365,7 +372,13 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
         _arAnchorManager?.removeAnchor(corner.anchor);
       }
 
-      if (!mounted) return;
+      // Remove volume box
+    if (_volumeNodeName != null) {
+      _arObjectManager?.removeNodeByName(_volumeNodeName!);
+      _volumeNodeName = null;
+    }
+
+    if (!mounted) return;
       setState(() {
         _corners.clear();
         _lineNodeNames.clear();
@@ -391,7 +404,13 @@ class _ARScreenState extends State<ARScreen> with WidgetsBindingObserver {
       }
       _lineNodeNames.clear();
 
-      final last = _corners.last;
+      // Remove volume box if exists
+    if (_volumeNodeName != null) {
+      _arObjectManager?.removeNodeByName(_volumeNodeName!);
+      _volumeNodeName = null;
+    }
+
+    final last = _corners.last;
       _arObjectManager?.removeNodeByName(last.sphereNodeName);
       _arAnchorManager?.removeAnchor(last.anchor);
 

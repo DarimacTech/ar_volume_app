@@ -243,6 +243,26 @@ internal class AndroidARView(
                                 result.success(false)
                             }
                         }
+                        "addNativeVolume" -> {
+                            // Adds a 3D semi-transparent volume from 8 points
+                            val boxNodeName: String? = call.argument<String>("name")
+                            val pts = call.argument<List<List<Double>>>("points")
+                            if (boxNodeName != null && pts != null && pts.size == 8) {
+                                val vectorPoints = pts.map { Vector3(it[0].toFloat(), it[1].toFloat(), it[2].toFloat()) }
+                                modelBuilder.makeComplexBoxNode(viewContext, vectorPoints)
+                                    .thenAccept { boxNode ->
+                                        boxNode.name = boxNodeName
+                                        arSceneView.scene.addChild(boxNode)
+                                        result.success(true)
+                                    }.exceptionally {
+                                        result.success(false)
+                                        null
+                                    }
+                            } else {
+                                result.success(false)
+                            }
+                        }
+
                         "removeNode" -> {
                             val nodeName: String? = call.argument<String>("name")
                             nodeName?.let{

@@ -196,5 +196,25 @@ class ARObjectManager {
       return false;
     }
   }
+
+  /// Draw a 3D semi-transparent volume (box) between 8 world-space points.
+  Future<bool> addNativeVolume({
+    required String name,
+    required List<Vector3> points,
+  }) async {
+    try {
+      final List<List<double>> serializedPoints =
+          points.map((p) => [p.x, p.y, p.z]).toList();
+      final result = await _channel.invokeMethod<bool>('addNativeVolume', {
+        'name': name,
+        'points': serializedPoints,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('addNativeVolume error: $e');
+      return false;
+    }
+  }
 }
+
 

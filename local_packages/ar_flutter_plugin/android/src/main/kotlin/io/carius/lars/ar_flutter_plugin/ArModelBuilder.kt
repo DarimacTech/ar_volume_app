@@ -8,6 +8,9 @@ import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.math.Quaternion
 import com.google.ar.sceneform.assets.RenderableSource
 
+import com.google.ar.sceneform.rendering.RenderableDefinition
+import com.google.ar.sceneform.rendering.Vertex
+import java.util.Arrays
 import java.util.concurrent.CompletableFuture
 import android.net.Uri
 import android.view.Gravity
@@ -221,7 +224,58 @@ class ArModelBuilder {
 
         return completableFutureNode
     }
+    // Creates a semi-transparent 3D box (mesh) from 8 corners
+    fun makeComplexBoxNode(context: Context, points: List<Vector3>): CompletableFuture<Node> {
+        val future = CompletableFuture<Node>()
+        val boxNode = Node()
+
+        // Material: Semi-transparent Cyan (Glass effect)
+        MaterialFactory.makeTransparentWithColor(context, Color(0f, 1f, 1f, 0.3f))
+            .thenAccept { material ->
+                material.setFloat("roughness", 0.2f)
+                material.setFloat("reflectance", 0.8f)
+
+                // Define 8 vertices based on the points
+                val vertices = points.map { Vertex.builder().setPosition(it).build() }
+
+                // Define 12 triangles (2 per face) for 6 faces
+                // Assuming points: 0-3 base (CCW), 4-7 top (CCW)
+                val indices = mutableListOf<Int>()
+                
+                // Base face
+                indices.addAll(listOf(0, 1, 2, 0, 2, 3))
+                // Top face
+                indices.addAll(listOf(4, 5, 6, 4, 6, 7))
+                // Side faces
+                indices.addAll(listOf(0, 1, 5, 0, 5, 4)) // Front
+                indices.addAll(listOf(1, 2, 6, 1, 6, 5)) // Right
+                indices.addAll(listOf(2, 3, 7, 2, 7, 6)) // Back
+                indices.addAll(listOf(3, 0, 4, 3, 4, 7)) // Left
+
+                val submesh = RenderableDefinition.Submesh.builder()
+                    .setTriangleIndices(indices)
+                    .setMaterial(material)
+                    .build()
+
+                val definition = RenderableDefinition.builder()
+                    .setVertices(vertices)
+                    .setSubmeshes(listOf(submesh))
+                    .build()
+
+                ModelRenderable.builder()
+                    .setSource(definition)
+                    .build()
+                    .thenAccept { renderable ->
+                        renderable.isShadowCaster = false
+                        renderable.isShadowReceiver = false
+                        boxNode.renderable = renderable
+                        future.complete(boxNode)
+                    }
+            }
+        return future
+    }
 }
+
 
 class CustomTransformableNode(transformationSystem: TransformationSystem, objectManagerChannel: MethodChannel, enablePans: Boolean, enableRotation: Boolean) :
     TransformableNode(transformationSystem) { //
@@ -282,6 +336,7 @@ class CustomTranslationController(transformableNode: BaseTransformableNode, gest
         super.onEndTransformation(gesture)
      }
 }
+
 
 class CustomRotationController(transformableNode: BaseTransformableNode, gestureRecognizer: TwistGestureRecognizer, objectManagerChannel: MethodChannel) :
     RotationController(transformableNode, gestureRecognizer) {
